@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import base64
 import json
-import os
+import os, sys
 from datetime import datetime, timezone, timedelta, time as dt_time
 import threading
 import time
@@ -27,7 +27,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Inicializa a aplicação Flask e define o diretório de templates
-app = Flask(__name__, template_folder='templates')
+if getattr(sys, 'frozen', False):  # rodando como exe
+    base_path = sys._MEIPASS
+else:  # rodando normal em Python
+    base_path = os.path.abspath(".")
+
+app = Flask(__name__, template_folder=os.path.join(base_path, 'templates'))
+
 
 class DatabaseManager:
     """Gerencia a conexão e operações com diferentes tipos de bancos de dados (SQLite, MySQL, PostgreSQL)
@@ -37,6 +43,10 @@ class DatabaseManager:
     def __init__(self):
         self.connection = None  # Objeto de conexão com o banco de dados
         self.config = None      # Configurações do banco de dados (tipo, host, etc.)
+        self.entrada_padrao = "09:00"
+        self.saida_padrao = "18:00"
+        self.tempo_almoco_minutos = 60
+        self.contar_finais_semana = False
         
     def connect(self, config):
         """Estabelece a conexão com o banco de dados com base nas configurações fornecidas.
@@ -464,14 +474,11 @@ class FaceRecognitionServer:
         logger.info(f"Registros carregados: {len(self.attendance_log)}")
         
     def _load_config(self):
-        """Carrega as configurações do sistema a partir do arquivo `system_config.json`.
-        Define valores padrão se o arquivo não existir ou estiver incompleto.
-        """
         try:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    
+
                 self.storage_type = config.get('storage_type', 'local')
                 self.confirmation_seconds = config.get('confirmation_seconds', 3.0)
                 self.attendance_cooldown_seconds = config.get('attendance_cooldown_seconds', 60)
@@ -479,17 +486,11 @@ class FaceRecognitionServer:
                 self.entrada_padrao = config.get('entrada_padrao', '09:00')
                 self.saida_padrao = config.get('saida_padrao', '18:00')
                 self.tempo_almoco_minutos = config.get('tempo_almoco_minutos', 60)
-                
-                logger.info("Configurações carregadas do arquivo")
+                self.contar_finais_semana = config.get('contar_finais_semana', False)  # NOVO
         except Exception as e:
             logger.warning(f"Erro ao carregar configurações: {e}")
-    
+
     def save_config(self):
-        """Salva as configurações atuais do sistema no arquivo `system_config.json`.
-        
-        Returns:
-            bool: True se as configurações foram salvas, False caso contrário.
-        """
         try:
             config = {
                 'storage_type': self.storage_type,
@@ -498,18 +499,16 @@ class FaceRecognitionServer:
                 'database_config': self.database_config,
                 'entrada_padrao': self.entrada_padrao,
                 'saida_padrao': self.saida_padrao,
-                'tempo_almoco_minutos': self.tempo_almoco_minutos
+                'tempo_almoco_minutos': self.tempo_almoco_minutos,
+                'contar_finais_semana': self.contar_finais_semana  # NOVO
             }
-            
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-                
-            logger.info("Configurações salvas")
             return True
         except Exception as e:
             logger.error(f"Erro ao salvar configurações: {e}")
             return False
-    
+        
     def _initialize_local_files(self):
         """Garante que o arquivo `attendance.csv` e o relatório CSV existam e estejam com cabeçalhos corretos.
         """
@@ -1163,37 +1162,33 @@ class FaceRecognitionServer:
     def _gerar_relatorio_mensal(self, nome, mes, ano, attendance_by_day):
         """Gera um relatório mensal detalhado para um funcionário.
         Calcula horas trabalhadas, previstas e saldo para cada dia do mês.
-        
-        Args:
-            nome (str): Nome do funcionário.
-            mes (int): Mês para o relatório (1-12).
-            ano (int): Ano para o relatório.
-            attendance_by_day (dict): Registros de ponto agrupados por dia.
-            
-        Returns:
-            dict: Relatório mensal formatado com detalhes diários e totais.
+        Agora inclui cálculo de horas extras para fins de semana.
         """
         
         dias_relatorio = []
         total_horas_trabalhadas_minutos = 0
         total_horas_previstas_minutos = 0
+        total_horas_extras_minutos = 0  # NOVO: Total de horas extras
         
         # Obter configurações CLT do servidor para o cálculo
         entrada_padrao_str = self.entrada_padrao
         saida_padrao_str = self.saida_padrao
         tempo_almoco_minutos = self.tempo_almoco_minutos
 
-        # Iterar por todos os dias do mês para garantir que dias sem ponto também apareçam
+        # Iterar por todos os dias do mês
         for day in range(1, 32):
             try:
                 current_date = datetime(ano, mes, day)
-            except ValueError: # Dia inválido para o mês (ex: 31 de fev, 31 de abr)
-                break # Sai do loop quando o dia é inválido para o mês
+            except ValueError:
+                break
             
             day_key = current_date.strftime("%Y-%m-%d")
-            registros_dia = attendance_by_day.get(day_key, []) # Pega registros para o dia, ou lista vazia
+            registros_dia = attendance_by_day.get(day_key, [])
             
-            # Mapeamento de dias da semana para português
+            # Verificar se é final de semana
+            dia_semana = current_date.weekday()  # 0=segunda, 6=domingo
+            is_final_semana = dia_semana >= 5
+            
             days_translation = {
                 'Monday': 'Segunda', 'Tuesday': 'Terça', 'Wednesday': 'Quarta',
                 'Thursday': 'Quinta', 'Friday': 'Sexta', 'Saturday': 'Sábado', 'Sunday': 'Domingo'
@@ -1206,6 +1201,26 @@ class FaceRecognitionServer:
                 registros_dia, entrada_padrao_str, saida_padrao_str, tempo_almoco_minutos
             )
             
+            # NOVO: Lógica para horas extras em finais de semana
+            horas_extras_dia_minutos = 0
+            if is_final_semana and len(registros_dia) > 0:
+                # Em final de semana, todas as horas trabalhadas são consideradas extras
+                horas_extras_dia_minutos = saldo_dia_info['horas_trabalhadas_minutos']
+                # Para fins de semana, zeramos as horas previstas
+                saldo_dia_info['horas_previstas_minutos'] = 0
+                saldo_dia_info['horas_previstas'] = "00:00"
+                saldo_dia_info['saldo_minutos'] = horas_extras_dia_minutos  # Saldo positivo = horas extras
+                saldo_dia_info['saldo'] = self._formatar_minutos(horas_extras_dia_minutos)
+            
+            # Atualizar totais
+            if not is_final_semana or self.contar_finais_semana:
+                # Dias úteis ou finais de semana configurados para contar como normais
+                total_horas_trabalhadas_minutos += saldo_dia_info['horas_trabalhadas_minutos']
+                total_horas_previstas_minutos += saldo_dia_info['horas_previstas_minutos']
+            else:
+                # Finais de semana não contam para horas normais, só para extras
+                total_horas_extras_minutos += horas_extras_dia_minutos
+            
             dias_relatorio.append({
                 'data': current_date.strftime("%d/%m/%Y"),
                 'dia_semana': dia_semana_pt,
@@ -1217,12 +1232,13 @@ class FaceRecognitionServer:
                 'horas_trabalhadas': saldo_dia_info['horas_trabalhadas'],
                 'horas_previstas': saldo_dia_info['horas_previstas'],
                 'saldo': saldo_dia_info['saldo'],
-                'saldo_minutos': saldo_dia_info['saldo_minutos']
+                'saldo_minutos': saldo_dia_info['saldo_minutos'],
+                'is_final_semana': is_final_semana,  # NOVO
+                'horas_extras': self._formatar_minutos(horas_extras_dia_minutos) if is_final_semana else "00:00",  # NOVO
+                'horas_extras_minutos': horas_extras_dia_minutos  # NOVO
             })
-            
-            total_horas_trabalhadas_minutos += saldo_dia_info['horas_trabalhadas_minutos']
-            total_horas_previstas_minutos += saldo_dia_info['horas_previstas_minutos']
-            
+                
+        # Calcular saldo final considerando horas extras
         saldo_final_minutos = total_horas_trabalhadas_minutos - total_horas_previstas_minutos
         
         return {
@@ -1232,14 +1248,61 @@ class FaceRecognitionServer:
             'dias': dias_relatorio,
             'total_horas_trabalhadas': self._formatar_minutos(total_horas_trabalhadas_minutos),
             'total_horas_previstas': self._formatar_minutos(total_horas_previstas_minutos),
+            'total_horas_extras': self._formatar_minutos(total_horas_extras_minutos),  # NOVO
             'saldo_final': self._formatar_minutos(saldo_final_minutos),
             'saldo_final_minutos': saldo_final_minutos,
             'configuracoes': {
                 'entrada_padrao': entrada_padrao_str,
                 'saida_padrao': saida_padrao_str,
-                'tempo_almoco': self._formatar_minutos(tempo_almoco_minutos)
+                'tempo_almoco': self._formatar_minutos(tempo_almoco_minutos),
+                'contar_finais_semana': self.contar_finais_semana  # NOVO
             },
             'tipo': 'mensal'
+        }
+
+    def _gerar_relatorio_anual(self, nome, ano, processed_attendance):
+        """Gera um relatório anual consolidado por mês para um funcionário.
+        Agora inclui cálculo de horas extras para finais de semana.
+        """
+        meses_relatorio = {}
+        
+        # Agrupar registros por mês e dia para passar para o gerador mensal
+        attendance_by_month_and_day = {}
+        for record in processed_attendance:
+            if record['datetime'].year == ano:
+                month_key = record['datetime'].month
+                day_key = record['data']
+                if month_key not in attendance_by_month_and_day:
+                    attendance_by_month_and_day[month_key] = {}
+                if day_key not in attendance_by_month_and_day[month_key]:
+                    attendance_by_month_and_day[month_key][day_key] = []
+                attendance_by_month_and_day[month_key][day_key].append(record)
+
+        # Itera sobre os meses que possuem registros e gera o relatório mensal para cada um
+        for mes_num in sorted(attendance_by_month_and_day.keys()):
+            relatorio_mes = self._gerar_relatorio_mensal(nome, mes_num, ano, attendance_by_month_and_day[mes_num])
+            meses_relatorio[mes_num] = relatorio_mes
+        
+        # NOVO: Calcular totais anuais
+        total_horas_extras_anual_minutos = 0
+        total_saldo_anual_minutos = 0
+        
+        for mes_num, relatorio_mes in meses_relatorio.items():
+            # Extrair minutos dos formatos HH:MM
+            if 'total_horas_extras' in relatorio_mes and relatorio_mes['total_horas_extras'] != '00:00':
+                horas_extras_str = relatorio_mes['total_horas_extras']
+                horas, minutos = map(int, horas_extras_str.split(':'))
+                total_horas_extras_anual_minutos += horas * 60 + minutos
+            
+            total_saldo_anual_minutos += relatorio_mes['saldo_final_minutos']
+        
+        return {
+            'nome': nome,
+            'ano': ano,
+            'meses': meses_relatorio,
+            'total_horas_extras_anual': self._formatar_minutos(total_horas_extras_anual_minutos),  # NOVO
+            'total_saldo_anual': self._formatar_minutos(total_saldo_anual_minutos),  # NOVO
+            'tipo': 'anual'
         }
 
     def _gerar_relatorio_anual(self, nome, ano, processed_attendance):
@@ -1590,38 +1653,36 @@ def test_database_connection_api():
 
 # ========== ROTAS CLT ==========
 
+@app.route('/api/get_clt_config', methods=['GET'])
+def get_clt_config_api():
+    try:
+        config = {
+            'entrada_padrao': face_server.entrada_padrao,
+            'saida_padrao': face_server.saida_padrao,
+            'tempo_almoco_minutos': face_server.tempo_almoco_minutos,
+            'contar_finais_semana': face_server.contar_finais_semana  # NOVO
+        }
+        return jsonify({'success': True, 'config': config})
+    except Exception as e:
+        logger.error(f"Erro em get_clt_config: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/set_clt_config', methods=['POST'])
 def set_clt_config_api():
-    """API para definir as configurações CLT (horário padrão de entrada, saída, tempo de almoço).
-    """
     try:
         data = request.get_json()
         
         face_server.entrada_padrao = data.get('entrada_padrao', '09:00')
         face_server.saida_padrao = data.get('saida_padrao', '18:00')
         face_server.tempo_almoco_minutos = data.get('tempo_almoco_minutos', 60)
+        face_server.contar_finais_semana = data.get('contar_finais_semana', False)  # NOVO
         
-        face_server.save_config() # Salva as configurações atualizadas no arquivo
+        face_server.save_config()
         
-        return jsonify({'success': True, 'message': 'Configurações CLT salvas'}) # Sucesso
+        return jsonify({'success': True, 'message': 'Configurações CLT salvas'})
         
     except Exception as e:
         logger.error(f"Erro em set_clt_config: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/get_clt_config', methods=['GET'])
-def get_clt_config_api():
-    """API que retorna as configurações CLT atuais.
-    """
-    try:
-        config = {
-            'entrada_padrao': face_server.entrada_padrao,
-            'saida_padrao': face_server.saida_padrao,
-            'tempo_almoco_minutos': face_server.tempo_almoco_minutos
-        }
-        return jsonify({'success': True, 'config': config})
-    except Exception as e:
-        logger.error(f"Erro em get_clt_config: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/relatorio_clt', methods=['GET'])
@@ -1646,8 +1707,7 @@ def relatorio_clt_api():
 
 @app.route('/api/export_relatorio_clt', methods=['GET'])
 def export_relatorio_clt_api():
-    """API para exportar o relatório CLT em formato Excel (XLSX).
-    """
+    """API para exportar o relatório CLT em formato Excel (XLSX)."""
     try:
         nome = request.args.get('nome', '')
         mes = request.args.get('mes', type=int)
@@ -1655,33 +1715,79 @@ def export_relatorio_clt_api():
         tipo = request.args.get('tipo', 'mensal')
         
         if not nome or not mes or not ano:
-            return jsonify({'success': False, 'error': 'Nome, mês e ano são obrigatórios'}) # Validação de entrada
+            return jsonify({'success': False, 'error': 'Nome, mês e ano são obrigatórios'})
         
         relatorio = face_server.gerar_relatorio_clt(nome, mes, ano, tipo)
         
-        output = BytesIO() # Cria um buffer em memória para o arquivo Excel
+        output = BytesIO()
+        
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             if tipo == 'mensal':
-                df = pd.DataFrame(relatorio['dias'])
+                # Preparar dados para o DataFrame
+                dados_export = []
+                for dia in relatorio['dias']:
+                    dados_export.append({
+                        'Data': dia['data'],
+                        'Dia da Semana': dia['dia_semana'],
+                        'Entrada': dia['entrada'],
+                        'Início Almoço': dia['almoco_ida'],
+                        'Fim Almoço': dia['almoco_volta'],
+                        'Saída': dia['saida'],
+                        'Almoçou': dia['almocou'],
+                        'Horas Trabalhadas': dia['horas_trabalhadas'],
+                        'Horas Previstas': dia['horas_previstas'],
+                        'Saldo do Dia': dia['saldo'],
+                        'Horas Extras': dia.get('horas_extras', '00:00')
+                    })
+                
+                df = pd.DataFrame(dados_export)
                 df.to_excel(writer, sheet_name=f"{mes}_{ano}", index=False)
                 
-                # Adiciona uma aba de resumo para o relatório mensal
+                # Adicionar resumo
                 resumo_data = {
-                    'Métrica': ['Horas Trabalhadas', 'Horas Previstas', 'Saldo'],
+                    'Métrica': [
+                        'Funcionário',
+                        'Período', 
+                        'Total Horas Trabalhadas',
+                        'Total Horas Previstas',
+                        'Total Horas Extras',
+                        'Saldo Final'
+                    ],
                     'Valor': [
+                        relatorio['nome'],
+                        f"{mes}/{ano}",
                         relatorio['total_horas_trabalhadas'],
                         relatorio['total_horas_previstas'],
+                        relatorio.get('total_horas_extras', '00:00'),
                         relatorio['saldo_final']
                     ]
                 }
                 pd.DataFrame(resumo_data).to_excel(writer, sheet_name='RESUMO', index=False)
-            else: # Tipo anual
-                # Itera sobre os meses do relatório anual e cria uma aba para cada mês
+                
+            else:  # Tipo anual
                 for mes_num, dados_mes in relatorio['meses'].items():
-                    df = pd.DataFrame(dados_mes['dias'])
-                    df.to_excel(writer, sheet_name=f"MES_{mes_num}", index=False)
+                    # Preparar dados para o DataFrame do mês
+                    dados_export_mes = []
+                    for dia in dados_mes['dias']:
+                        dados_export_mes.append({
+                            'Data': dia['data'],
+                            'Dia da Semana': dia['dia_semana'],
+                            'Entrada': dia['entrada'],
+                            'Início Almoço': dia['almoco_ida'],
+                            'Fim Almoço': dia['almoco_volta'],
+                            'Saída': dia['saida'],
+                            'Almoçou': dia['almocou'],
+                            'Horas Trabalhadas': dia['horas_trabalhadas'],
+                            'Horas Previstas': dia['horas_previstas'],
+                            'Saldo do Dia': dia['saldo'],
+                            'Horas Extras': dia.get('horas_extras', '00:00')
+                        })
+                    
+                    df_mes = pd.DataFrame(dados_export_mes)
+                    nome_mes = obter_nome_mes(mes_num)
+                    df_mes.to_excel(writer, sheet_name=f"{nome_mes}", index=False)
         
-        output.seek(0) # Volta o ponteiro do buffer para o início
+        output.seek(0)
         
         filename = f"relatorio_clt_{nome}_{mes}_{ano}.xlsx"
         return send_file(
@@ -1695,57 +1801,63 @@ def export_relatorio_clt_api():
         logger.error(f"Erro ao exportar relatório CLT: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-# ========== ROTAS DE RELATÓRIOS GERAIS ==========
+def obter_nome_mes(numero_mes):
+    """Função auxiliar para obter nome do mês em português."""
+    meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ]
+    return meses[numero_mes - 1] if 1 <= numero_mes <= 12 else f'Mês_{numero_mes}'
 
+# ========== ROTAS DE RELATÓRIOS GERAIS ==========
 @app.route('/api/download_report', methods=['GET'])
 def download_report_api():
-    """API para fazer download do relatório de ponto geral em formato CSV.
-    """
+    """API para fazer download do relatório de ponto geral em formato CSV."""
     try:
-        report_data = face_server.get_attendance_data()
+        # Garantir que o relatório esteja atualizado
+        face_server._generate_report_file()
         
-        output = BytesIO() # Buffer em memória
-        output.write('Data - Dia da Semana;Nome;Horário\\n'.encode('utf-8')) # Escreve o cabeçalho
-        
-        for row in report_data:
-            line = f"{row['date']};{row['name']};{row['time']}\\n"
-            output.write(line.encode('utf-8')) # Escreve cada linha de dados
-        
-        output.seek(0) # Volta o ponteiro para o início
-        
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=f"relatorio_ponto_{datetime.now().strftime('%Y%m%d')}.csv",
-            mimetype='text/csv'
-        )
-        
+        # Usar o arquivo físico em vez de BytesIO para melhor compatibilidade
+        if os.path.exists(face_server.report_file):
+            return send_file(
+                face_server.report_file,
+                as_attachment=True,
+                download_name=f"relatorio_ponto_{datetime.now().strftime('%Y%m%d')}.csv",
+                mimetype='text/csv'
+            )
+        else:
+            return jsonify({'success': False, 'error': 'Arquivo de relatório não encontrado'})
+            
     except Exception as e:
         logger.error(f"Erro ao baixar relatório: {e}")
         return jsonify({'success': False, 'error': str(e)})
-
+    
 @app.route('/api/download_excel', methods=['GET'])
 def download_excel_api():
-    """API para fazer download do relatório de ponto geral em formato Excel (XLSX).
-    """
+    """API para fazer download do relatório de ponto geral em formato Excel (XLSX)."""
     try:
+        # Garantir que o relatório esteja atualizado primeiro
+        face_server._generate_report_file()
+        
         report_data = face_server.get_attendance_data()
         
-        df = pd.DataFrame(report_data) # Cria um DataFrame pandas a partir dos dados
-        df = df[['date', 'name', 'time']] # Seleciona e reordena colunas
-        df.columns = ['Data - Dia da Semana', 'Nome', 'Horário'] # Renomeia colunas
+        df = pd.DataFrame(report_data)
+        df = df[['date', 'name', 'time']]
+        df.columns = ['Data - Dia da Semana', 'Nome', 'Horário']
         
-        output = BytesIO() # Buffer em memória
+        # CORREÇÃO: Usar BytesIO em vez de arquivo temporário
+        output = BytesIO()
+        
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Relatório Ponto', index=False) # Escreve o DataFrame na planilha
+            df.to_excel(writer, sheet_name='Relatório Ponto', index=False)
             
-            # Ajusta a largura das colunas no Excel para melhor visualização
             worksheet = writer.sheets['Relatório Ponto']
             worksheet.column_dimensions['A'].width = 20
             worksheet.column_dimensions['B'].width = 15
             worksheet.column_dimensions['C'].width = 10
         
-        output.seek(0) # Volta o ponteiro para o início
+        # CORREÇÃO: Preparar o output para envio
+        output.seek(0)
         
         return send_file(
             output,
@@ -1753,11 +1865,11 @@ def download_excel_api():
             download_name=f"relatorio_ponto_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        
+            
     except Exception as e:
         logger.error(f"Erro ao baixar relatório Excel: {e}")
         return jsonify({'success': False, 'error': str(e)})
-
+    
 @app.route('/video_feed')
 def video_feed():
     """Rota para o feed de vídeo da câmera.

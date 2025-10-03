@@ -449,6 +449,15 @@
                     <label for="modalTempoAlmoco">Tempo de Almoço (minutos):</label>
                     <input type="number" id="modalTempoAlmoco" min="0" step="15" value="60">
                 </div>
+                
+                <!-- NOVO: Checkbox para contar finais de semana -->
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="modalContarFinaisSemana">
+                        Contar finais de semana como dias úteis
+                    </label>
+                    <small style="color: #666;">Se desmarcado, pontos em finais de semana serão considerados como hora extra.</small>
+                </div>
             </div>
             
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -751,12 +760,22 @@ function gerarHTMLRelatorioMensal(relatorio) {
                 <span>Configurações:</span>
                 <span>Entrada: ${relatorio.configuracoes.entrada_padrao} | Saída: ${relatorio.configuracoes.saida_padrao} | Almoço: ${relatorio.configuracoes.tempo_almoco}</span>
             </div>
+            <div class="summary-item">
+                <span>Contar finais de semana:</span>
+                <span>${relatorio.configuracoes.contar_finais_semana ? 'Sim' : 'Não'}</span>
+            </div>
             <div class="summary-item summary-total">
                 <span>Saldo Final:</span>
                 <span class="${relatorio.saldo_final_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo'}">
                     ${relatorio.saldo_final} ${relatorio.saldo_final_minutos >= 0 ? '(Positivo)' : '(Negativo)'}
                 </span>
             </div>
+            ${relatorio.total_horas_extras && relatorio.total_horas_extras !== '00:00' ? `
+            <div class="summary-item summary-total" style="color: #e67e22;">
+                <span>Total Horas Extras:</span>
+                <span style="font-weight: bold;">${relatorio.total_horas_extras}</span>
+            </div>
+            ` : ''}
         </div>
         
         <table class="clt-table">
@@ -770,6 +789,7 @@ function gerarHTMLRelatorioMensal(relatorio) {
                     <th>Saída</th>
                     <th>Almoçou</th>
                     <th>Saldo do Dia</th>
+                    <th>Horas Extras</th>
                 </tr>
             </thead>
             <tbody>
@@ -777,17 +797,20 @@ function gerarHTMLRelatorioMensal(relatorio) {
     
     relatorio.dias.forEach(dia => {
         const saldoClass = dia.saldo_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo';
+        const isFinalSemana = dia.dia_semana === 'Sábado' || dia.dia_semana === 'Domingo';
+        const linhaStyle = isFinalSemana ? 'background-color: #fff3cd;' : '';
         
         html += `
-            <tr>
+            <tr style="${linhaStyle}">
                 <td>${dia.data}</td>
-                <td>${dia.dia_semana}</td>
+                <td>${dia.dia_semana} ${isFinalSemana ? '🏖️' : ''}</td>
                 <td>${dia.entrada}</td>
                 <td>${dia.almoco_ida}</td>
                 <td>${dia.almoco_volta}</td>
                 <td>${dia.saida}</td>
                 <td>${dia.almocou}</td>
                 <td class="${saldoClass}">${dia.saldo}</td>
+                <td style="color: #e67e22; font-weight: bold;">${dia.horas_extras}</td>
             </tr>
         `;
     });
@@ -811,6 +834,12 @@ function gerarHTMLRelatorioMensal(relatorio) {
                     ${relatorio.saldo_final}
                 </span>
             </div>
+            ${relatorio.total_horas_extras && relatorio.total_horas_extras !== '00:00' ? `
+            <div class="summary-item summary-total" style="color: #e67e22; border-top: 2px solid #e67e22;">
+                <span>Total Horas Extras (finais de semana):</span>
+                <span style="font-weight: bold;">${relatorio.total_horas_extras}</span>
+            </div>
+            ` : ''}
         </div>
     `;
     
@@ -834,6 +863,18 @@ function gerarHTMLRelatorioAnual(relatorio) {
                 <span>Funcionário:</span>
                 <span><strong>${relatorio.nome}</strong></span>
             </div>
+            ${relatorio.total_horas_extras_anual && relatorio.total_horas_extras_anual !== '00:00' ? `
+            <div class="summary-item summary-total" style="color: #e67e22;">
+                <span>Total Horas Extras Anual:</span>
+                <span style="font-weight: bold;">${relatorio.total_horas_extras_anual}</span>
+            </div>
+            ` : ''}
+            <div class="summary-item summary-total">
+                <span>Saldo Final Anual:</span>
+                <span class="${relatorio.total_saldo_anual && relatorio.total_saldo_anual.startsWith('-') ? 'saldo-negativo' : 'saldo-positivo'}">
+                    ${relatorio.total_saldo_anual || '00:00'}
+                </span>
+            </div>
         </div>
     `;
     
@@ -854,11 +895,12 @@ function gerarHTMLRelatorioAnual(relatorio) {
                         <th>Data</th>
                         <th>Dia</th>
                         <th>Entrada</th>
-                    <th>Início Almoço</th>
-                    <th>Fim Almoço</th>
+                        <th>Início Almoço</th>
+                        <th>Fim Almoço</th>
                         <th>Saída</th>
                         <th>Almoçou</th>
                         <th>Saldo do Dia</th>
+                        <th>Horas Extras</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -866,17 +908,20 @@ function gerarHTMLRelatorioAnual(relatorio) {
         
         relatorioMes.dias.forEach(dia => {
             const saldoClass = dia.saldo_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo';
+            const isFinalSemana = dia.dia_semana === 'Sábado' || dia.dia_semana === 'Domingo';
+            const linhaStyle = isFinalSemana ? 'background-color: #fff3cd;' : '';
             
             html += `
-                <tr>
+                <tr style="${linhaStyle}">
                     <td>${dia.data}</td>
-                    <td>${dia.dia_semana}</td>
+                    <td>${dia.dia_semana} ${isFinalSemana ? '🏖️' : ''}</td>
                     <td>${dia.entrada}</td>
                     <td>${dia.almoco_ida}</td>
                     <td>${dia.almoco_volta}</td>
                     <td>${dia.saida}</td>
                     <td>${dia.almocou}</td>
                     <td class="${saldoClass}">${dia.saldo}</td>
+                    <td style="color: #e67e22; font-weight: bold;">${dia.horas_extras || '00:00'}</td>
                 </tr>
             `;
         });
@@ -894,6 +939,12 @@ function gerarHTMLRelatorioAnual(relatorio) {
                     <span>Total Horas Previstas:</span>
                     <span>${relatorioMes.total_horas_previstas}</span>
                 </div>
+                ${relatorioMes.total_horas_extras && relatorioMes.total_horas_extras !== '00:00' ? `
+                <div class="summary-item" style="color: #e67e22;">
+                    <span>Horas Extras:</span>
+                    <span style="font-weight: bold;">${relatorioMes.total_horas_extras}</span>
+                </div>
+                ` : ''}
                 <div class="summary-item summary-total">
                     <span>Saldo do Mês:</span>
                     <span class="${relatorioMes.saldo_final_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo'}">
@@ -943,21 +994,38 @@ async function exportarRelatorioCLT() {
     }
     
     try {
+        // Mostrar loading
+        document.getElementById('cltLoading').style.display = 'block';
+        
         // Constrói a URL para a API de exportação
         const url = `/api/export_relatorio_clt?nome=${encodeURIComponent(funcionario)}&mes=${mes}&ano=${ano}&tipo=${tipo}`;
         
-        // Cria um link temporário e simula um clique para iniciar o download
+        // Fazer a requisição primeiro para verificar se há erro
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao exportar relatório');
+        }
+        
+        // Se a resposta foi bem-sucedida, criar o link de download
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.download = `relatorio_clt_${funcionario}_${mes}_${ano}.xlsx`; // Nome do arquivo para download
+        link.href = downloadUrl;
+        link.download = `relatorio_clt_${funcionario}_${mes}_${ano}.xlsx`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
         
-        showPopup('Download do relatório iniciado.', 'success');
+        showPopup('Download do relatório Excel iniciado.', 'success');
+        
     } catch (e) {
         console.error('Erro ao exportar relatório:', e);
-        showPopup('Erro ao exportar relatório.', 'error');
+        showPopup('Erro ao exportar relatório: ' + e.message, 'error');
+    } finally {
+        document.getElementById('cltLoading').style.display = 'none';
     }
 }
 
@@ -1051,7 +1119,8 @@ async function saveConfig() {
         const cltConfig = {
             entrada_padrao: document.getElementById('modalEntradaPadrao').value,
             saida_padrao: document.getElementById('modalSaidaPadrao').value,
-            tempo_almoco_minutos: parseInt(document.getElementById('modalTempoAlmoco').value)
+            tempo_almoco_minutos: parseInt(document.getElementById('modalTempoAlmoco').value),
+            contar_finais_semana: document.getElementById('modalContarFinaisSemana').checked
         };
 
         // Salvar configurações de armazenamento
@@ -1129,6 +1198,7 @@ async function loadCLTConfig() {
             document.getElementById('modalEntradaPadrao').value = data.config.entrada_padrao;
             document.getElementById('modalSaidaPadrao').value = data.config.saida_padrao;
             document.getElementById('modalTempoAlmoco').value = data.config.tempo_almoco_minutos;
+            document.getElementById('modalContarFinaisSemana').checked = data.config.contar_finais_semana || false;
         }
     } catch (e) {
         console.error('Erro ao carregar configurações CLT:', e);
@@ -1152,6 +1222,13 @@ document.addEventListener('DOMContentLoaded', () => {
     preencherAnos();
     loadCLTConfig(); // Carrega configurações CLT para o modal
 });
+function obterNomeMes(numeroMes) {
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    return meses[numeroMes - 1] || 'Mês Desconhecido';
+}
 
 // ========== FUNÇÕES DE STATUS E POPUP ==========
 /**
@@ -1521,12 +1598,9 @@ async function downloadReport() {
     try {
         updateStatus('Preparando download do relatório CSV...');
         
-        const link = document.createElement('a');
-        link.href = '/api/download_report';
-        link.download = `relatorio_ponto_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Abrir em nova aba para forçar o download no PyWebView
+        const url = '/api/download_report';
+        window.open(url, '_blank');
         
         showPopup('Download do relatório CSV iniciado.', 'success');
         
@@ -1543,12 +1617,9 @@ async function downloadExcel() {
     try {
         updateStatus('Gerando e baixando relatório Excel...');
         
-        const link = document.createElement('a');
-        link.href = '/api/download_excel';
-        link.download = `relatorio_ponto_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Abrir em nova aba para forçar o download no PyWebView
+        const url = '/api/download_excel';
+        window.open(url, '_blank');
         
         showPopup('Download do relatório Excel iniciado.', 'success');
         
