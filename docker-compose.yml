@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: ponto_app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=server.py
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://user:password@db:5432/ponto_db
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+    command: flask run --host=0.0.0.0 --port=5000
+
+  db:
+    image: postgres:15
+    container_name: ponto_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ponto_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
