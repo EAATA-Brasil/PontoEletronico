@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Reconhecimento Facial - Ponto</title>
+    <style>
+        /* ========== ESTILOS GERAIS ========== */
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f5f5f5; 
+            color: #333; 
+        }
+        .container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+        h1 { text-align: center; }
+        .video-container { 
+            text-align: center; 
+            margin: 10px 0; 
+        }
+        #videoFeed { 
+            max-width: 100%; 
+            border-radius: 8px; 
+            border: 1px solid #ddd; 
+            display: none; 
+        }
+        .controls { 
+            text-align: center; 
+            margin: 10px 0; 
+        }
+        button { 
+            padding: 8px 14px; 
+            margin: 4px; 
+            border-radius: 6px; 
+            border: none; 
+            cursor: pointer; 
+        }
+        .btn-primary { background: #007bff; color: #fff; }
+        .btn-danger { background: #dc3545; color: #fff; }
+        .btn-success { background: #28a745; color: #fff; }
+        .btn-warning { background: #ffc107; color: #000; }
+        .btn-info { background: #17a2b8; color: #fff; }
+        .upload-section { 
+            margin: 12px 0; 
+            padding: 12px; 
+            border: 2px dashed #ddd; 
+            border-radius: 8px; 
+            background: #fff; 
+        }
+        .faces-list { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            margin: 10px 0; 
+        }
+        .face-item { 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 6px; 
+            background: #fafafa; 
+            width: 220px; 
+        }
+        .config { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            margin: 10px 0; 
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 12px; 
+        }
+        th, td { 
+            padding: 8px; 
+            border-bottom: 1px solid #eee; 
+            text-align: left; 
+        }
+        
+        /* Ícone de Configuração */
+        .config-icon {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #6c757d;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 24px;
+            transition: all 0.3s ease;
+        }
+        .config-icon:hover {
+            background: #5a6268;
+            transform: rotate(90deg);
+        }
+        
+        /* Modal de Configuração */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal-overlay.show {
+            display: flex;
+        }
+        .modal {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between; /* Alterado de 'between' para 'space-between' */
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .modal-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 0;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6c757d;
+        }
+        .modal-close:hover {
+            color: #dc3545;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .form-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+        }
+        .form-section h4 {
+            margin-top: 0;
+            color: #495057;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+        }
+        .storage-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .storage-status.local {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .storage-status.database {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b3d7ff;
+        }
+        
+        /* Popup de Notificação */
+        .popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .popup.show { opacity: 1; transform: translateY(0); }
+        .popup.success { background: #28a745; }
+        .popup.error { background: #dc3545; }
+        .popup.warning { background: #ffc107; color: #000; }
+        .popup.info { background: #17a2b8; }
+        
+        /* ========== ESTILOS PARA RELATÓRIO CLT ========== */
+        
+        .clt-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        
+        .clt-filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .clt-results {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .clt-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        
+        .clt-table th {
+            background: #343a40;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #454d55;
+        }
+        
+        .clt-table td {
+            padding: 8px;
+            border: 1px solid #dee2e6;
+            text-align: center;
+        }
+        
+        .clt-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .clt-table tr:hover {
+            background: #e9ecef;
+        }
+        
+        .saldo-positivo {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .saldo-negativo {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .month-header {
+            background: #17a2b8 !important;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            padding: 12px;
+        }
+        
+        .clt-summary {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #ced4da;
+        }
+        
+        .summary-total {
+            font-weight: bold;
+            font-size: 16px;
+            color: #343a40;
+            border-bottom: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 2px solid #343a40;
+        }
+        
+        /* Estilos para o indicador de carregamento */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Ícone de Configuração Flutuante -->
+    <div class="config-icon" onclick="openConfigModal()">
+        ⚙️
+    </div>
+
+    <!-- Modal de Configuração -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Configurações do Sistema</h3>
+                <button class="modal-close" onclick="closeConfigModal()">×</button>
+            </div>
+            
+            <!-- Status do Armazenamento Atual -->
+            <div id="storageStatus" class="storage-status local">
+                📁 Modo: Armazenamento Local
+            </div>
+            
+            <div class="form-section">
+                <h4>🔧 Configuração de Armazenamento</h4>
+                
+                <div class="form-group">
+                    <label for="storageType">Tipo de Armazenamento:</label>
+                    <select id="storageType" onchange="toggleDatabaseConfig()">
+                        <option value="local">Local (Arquivos CSV)</option>
+                        <option value="database">Banco de Dados</option>
+                    </select>
+                </div>
+                
+                <!-- Configuração do Banco de Dados (inicialmente oculto) -->
+                <div id="databaseConfig" style="display: none;">
+                    <div class="form-group">
+                        <label for="dbType">Tipo de Banco:</label>
+                        <select id="dbType">
+                            <option value="sqlite">SQLite</option>
+                            <option value="mysql">MySQL</option>
+                            <option value="postgresql">PostgreSQL</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dbHost">Host:</label>
+                        <input type="text" id="dbHost" placeholder="localhost">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dbPort">Porta:</label>
+                        <input type="number" id="dbPort" placeholder="3306">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dbName">Database:</label>
+                        <input type="text" id="dbName" placeholder="nome_do_banco">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dbUser">Usuário:</label>
+                        <input type="text" id="dbUser" placeholder="usuario">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dbPassword">Senha:</label>
+                        <input type="password" id="dbPassword" placeholder="senha">
+                    </div>
+                    
+                    <div class="form-group">
+                        <button class="btn-info" onclick="testDatabaseConnection()">Testar Conexão</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h4>⚙️ Configurações do Sistema</h4>
+                
+                <div class="form-group">
+                    <label for="modalConfirmSeconds">Segundos para Confirmação:</label>
+                    <input type="number" id="modalConfirmSeconds" min="0" step="0.5" value="3.0">
+                </div>
+                
+                <div class="form-group">
+                    <label for="modalCooldownSeconds">Cooldown (segundos):</label>
+                    <input type="number" id="modalCooldownSeconds" min="0" step="1" value="60">
+                </div>
+            </div>
+            
+            <!-- ========== CONFIGURAÇÕES CLT ========== -->
+            <div class="form-section">
+                <h4>📋 Configurações CLT</h4>
+                
+                <div class="form-group">
+                    <label for="modalEntradaPadrao">Horário de Entrada Padrão:</label>
+                    <input type="time" id="modalEntradaPadrao" value="09:00">
+                </div>
+                
+                <div class="form-group">
+                    <label for="modalSaidaPadrao">Horário de Saída Padrão:</label>
+                    <input type="time" id="modalSaidaPadrao" value="18:00">
+                </div>
+                
+                <div class="form-group">
+                    <label for="modalTempoAlmoco">Tempo de Almoço (minutos):</label>
+                    <input type="number" id="modalTempoAlmoco" min="0" step="15" value="60">
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-warning" onclick="closeConfigModal()">Cancelar</button>
+                <button class="btn-success" onclick="saveConfig()">Salvar Configurações</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>🔍 Ponto Eletrônico - Reconhecimento Facial</h1>
+        
+        <!-- Status do Sistema -->
+        <div id="status" style="padding:8px; background:#fff3cd; border-radius:6px; font-weight:600;">
+            Sistema pronto
+        </div>
+
+        <!-- Feed da Câmera -->
+        <div class="video-container">
+            <img id="videoFeed" src="/video_feed" alt="Feed da câmera">
+        </div>
+
+        <!-- Controles da Câmera -->
+        <div class="controls">
+            <button id="startBtn" class="btn-primary" onclick="startCamera()">Iniciar Câmera</button>
+            <button id="stopBtn" class="btn-danger" onclick="stopCamera()" style="display:none">Parar Câmera</button>
+        </div>
+
+        <!-- Cadastro de Faces -->
+        <div class="upload-section">
+            <h3>Adicionar / Capturar Face</h3>
+            <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
+            <input type="text" id="nameInput" placeholder="Nome da pessoa" style="padding:6px; margin-left:8px;">
+            <div style="margin-top:8px;">
+                <button class="btn-success" onclick="addFace()">Adicionar por Arquivo</button>
+                <button class="btn-primary" onclick="captureFace()">Capturar da Câmera</button>
+            </div>
+            <img id="imagePreview" style="display:block; max-width:160px; margin-top:8px;">
+        </div>
+
+        <!-- Configurações Básicas (removidas para serem gerenciadas apenas pelo modal) -->
+        <!--
+        <div class="config">
+            <label>Segundos para Confirmação:</label>
+            <input type="number" id="confirmSeconds" min="0" step="0.5" style="width:80px;">
+            <label>Cooldown (segundos):</label>
+            <input type="number" id="cooldownSeconds" min="0" step="1" style="width:80px;">
+            <button class="btn-primary" onclick="updateConfig()">Salvar Config</button>
+        </div>
+        -->
+
+        <!-- ========== SEÇÃO DE RELATÓRIO CLT ========== -->
+        <div class="clt-section">
+            <h3>📊 Relatório CLT - Horas Trabalhadas</h3>
+            
+            <!-- Filtros do Relatório -->
+            <div class="clt-filters">
+                <div class="form-group">
+                    <label for="cltFuncionario">Funcionário:</label>
+                    <select id="cltFuncionario" style="width: 100%;">
+                        <option value="">Selecione um funcionário</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cltTipo">Tipo de Relatório:</label>
+                    <select id="cltTipo" style="width: 100%;">
+                        <option value="mensal">Mensal</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cltMes">Mês:</label>
+                    <select id="cltMes" style="width: 100%;">
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cltAno">Ano:</label>
+                    <select id="cltAno" style="width: 100%;">
+                        <!-- Os anos serão preenchidos dinamicamente via JavaScript -->
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Botões de Ação -->
+            <div style="text-align: center; margin: 15px 0;">
+                <button class="btn-success" onclick="gerarRelatorioCLT()">📋 Gerar Relatório</button>
+                <button class="btn-info" onclick="exportarRelatorioCLT()">📊 Exportar para Excel</button>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div id="cltLoading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Gerando relatório...</p>
+            </div>
+            
+            <!-- Resultados do Relatório CLT -->
+            <div id="cltResults" class="clt-results">
+                <!-- O conteúdo será preenchido dinamicamente pelo JavaScript -->
+            </div>
+        </div>
+
+        <!-- Relatório Diário Geral -->
+        <div>
+            <h3>📊 Relatório Diário</h3>
+            <button class="btn-success" onclick="downloadReport()">📥 Baixar Relatório CSV</button>
+            <button class="btn-info" onclick="downloadExcel()">📊 Baixar Excel</button>
+            <small style="display: block; margin-top: 5px; color: #666;">
+                Relatório automático: Data - Dia da Semana | Nome | Horário
+            </small>
+        </div>
+
+        <!-- Faces Cadastradas -->
+        <div>
+            <h3>Faces Cadastradas</h3>
+            <div class="faces-list" id="facesList"></div>
+        </div>
+
+        <!-- Registros de Ponto Recentes -->
+        <div>
+            <h3>Registros de Ponto (recente)</h3>
+            <button class="btn-primary" onclick="loadAttendance()">Atualizar</button>
+            <table id="attendanceTable">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Horário (Local)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Registros serão preenchidos aqui -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+// ========== VARIÁVEIS GLOBAIS ========== 
+// Flag para controlar o estado da câmera
+let isCameraRunning = false;
+// ID do intervalo para atualização do reconhecimento facial
+let recognitionUpdateInterval;
+// Objeto para armazenar as configurações atuais do sistema
+let currentConfig = {};
+// Lista de funcionários cadastrados para uso nos filtros de relatório
+let funcionariosList = [];
+
+// ========== FUNÇÕES DO RELATÓRIO CLT ==========
+    
+/**
+ * Carrega a lista de funcionários cadastrados no sistema e preenche o dropdown de filtro.
+ */
+async function carregarFuncionarios() {
+    try {
+        const resp = await fetch("/api/get_faces");
+        const data = await resp.json();
+        
+        if (data.faces && data.faces.length > 0) {
+            funcionariosList = data.faces.map(face => face.name);
+            const select = document.getElementById('cltFuncionario');
+            
+            // Limpar opções existentes (exceto a primeira, que é o placeholder)
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+            
+            // Adicionar cada funcionário como uma opção no select
+            funcionariosList.forEach(funcionario => {
+                const option = document.createElement('option');
+                option.value = funcionario;
+                option.textContent = funcionario;
+                select.appendChild(option);
+            });
+        }
+    } catch (e) {
+        console.error('Erro ao carregar funcionários:', e);
+        showPopup('Erro ao carregar lista de funcionários.', 'error');
+    }
+}
+
+/**
+ * Preenche o dropdown de anos no filtro do relatório CLT com o ano atual e os dois anos anteriores.
+ */
+function preencherAnos() {
+    const select = document.getElementById('cltAno');
+    const currentYear = new Date().getFullYear();
+    
+    // Limpar opções existentes
+    select.innerHTML = '';
+    
+    // Adicionar anos (do ano atual até 2 anos atrás)
+    for (let year = currentYear; year >= currentYear - 2; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (year === currentYear) {
+            option.selected = true; // Seleciona o ano atual por padrão
+        }
+        select.appendChild(option);
+    }
+}
+
+/**
+ * Gera o relatório CLT fazendo uma requisição à API do backend e exibe os resultados.
+ */
+async function gerarRelatorioCLT() {
+    const funcionario = document.getElementById('cltFuncionario').value;
+    const tipo = document.getElementById('cltTipo').value;
+    const mes = document.getElementById('cltMes').value;
+    const ano = document.getElementById('cltAno').value;
+    
+    // Validações básicas dos campos de filtro
+    if (!funcionario) {
+        showPopup('Selecione um funcionário para gerar o relatório.', 'error');
+        return;
+    }
+    
+    if (!mes || !ano) {
+        showPopup('Selecione mês e ano para gerar o relatório.', 'error');
+        return;
+    }
+    
+    // Exibe o indicador de carregamento e oculta os resultados anteriores
+    document.getElementById('cltLoading').style.display = 'block';
+    document.getElementById('cltResults').style.display = 'none';
+    
+    try {
+        // Constrói a URL da API com os parâmetros de filtro
+        const url = `/api/relatorio_clt?nome=${encodeURIComponent(funcionario)}&mes=${mes}&ano=${ano}&tipo=${tipo}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        if (data.success) {
+            exibirRelatorioCLT(data.relatorio, tipo); // Chama a função para exibir o relatório
+        } else {
+            showPopup('Erro ao gerar relatório: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Erro ao gerar relatório CLT:', e);
+        showPopup('Erro de conexão ao gerar relatório.', 'error');
+    } finally {
+        // Oculta o indicador de carregamento ao finalizar
+        document.getElementById('cltLoading').style.display = 'none';
+    }
+}
+
+/**
+ * Exibe o relatório CLT na div de resultados, formatando-o de acordo com o tipo (mensal ou anual).
+ * @param {object} relatorio - O objeto de relatório retornado pela API.
+ * @param {string} tipo - O tipo de relatório ("mensal" ou "anual").
+ */
+function exibirRelatorioCLT(relatorio, tipo) {
+    const resultsDiv = document.getElementById('cltResults');
+    
+    if (tipo === 'mensal') {
+        resultsDiv.innerHTML = gerarHTMLRelatorioMensal(relatorio);
+    } else {
+        resultsDiv.innerHTML = gerarHTMLRelatorioAnual(relatorio);
+    }
+    
+    resultsDiv.style.display = 'block'; // Torna a seção de resultados visível
+}
+
+/**
+ * Gera o HTML para a exibição de um relatório CLT mensal.
+ * @param {object} relatorio - O objeto de relatório mensal.
+ * @returns {string} O HTML formatado para o relatório mensal.
+ */
+function gerarHTMLRelatorioMensal(relatorio) {
+    if (!relatorio.dias || relatorio.dias.length === 0) {
+        return '<div class="loading">Nenhum registro encontrado para o período selecionado.</div>';
+    }
+    
+    let html = `
+        <div class="clt-summary">
+            <h4>📋 Resumo do Mês</h4>
+            <div class="summary-item">
+                <span>Funcionário:</span>
+                <span><strong>${relatorio.nome}</strong></span>
+            </div>
+            <div class="summary-item">
+                <span>Período:</span>
+                <span>${relatorio.mes}/${relatorio.ano}</span>
+            </div>
+            <div class="summary-item">
+                <span>Configurações:</span>
+                <span>Entrada: ${relatorio.configuracoes.entrada_padrao} | Saída: ${relatorio.configuracoes.saida_padrao} | Almoço: ${relatorio.configuracoes.tempo_almoco}</span>
+            </div>
+            <div class="summary-item summary-total">
+                <span>Saldo Final:</span>
+                <span class="${relatorio.saldo_final_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo'}">
+                    ${relatorio.saldo_final} ${relatorio.saldo_final_minutos >= 0 ? '(Positivo)' : '(Negativo)'}
+                </span>
+            </div>
+        </div>
+        
+        <table class="clt-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Dia</th>
+                    <th>Entrada</th>
+                    <th>Início Almoço</th>
+                    <th>Fim Almoço</th>
+                    <th>Saída</th>
+                    <th>Almoçou</th>
+                    <th>Saldo do Dia</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    relatorio.dias.forEach(dia => {
+        const saldoClass = dia.saldo_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo';
+        
+        html += `
+            <tr>
+                <td>${dia.data}</td>
+                <td>${dia.dia_semana}</td>
+                <td>${dia.entrada}</td>
+                <td>${dia.almoco_ida}</td>
+                <td>${dia.almoco_volta}</td>
+                <td>${dia.saida}</td>
+                <td>${dia.almocou}</td>
+                <td class="${saldoClass}">${dia.saldo}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+        
+        <div class="clt-summary">
+            <div class="summary-item">
+                <span>Total Horas Trabalhadas:</span>
+                <span>${relatorio.total_horas_trabalhadas}</span>
+            </div>
+            <div class="summary-item">
+                <span>Total Horas Previstas:</span>
+                <span>${relatorio.total_horas_previstas}</span>
+            </div>
+            <div class="summary-item summary-total">
+                <span>Saldo Final:</span>
+                <span class="${relatorio.saldo_final_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo'}">
+                    ${relatorio.saldo_final}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+/**
+ * Gera o HTML para a exibição de um relatório CLT anual, consolidando os relatórios mensais.
+ * @param {object} relatorio - O objeto de relatório anual.
+ * @returns {string} O HTML formatado para o relatório anual.
+ */
+function gerarHTMLRelatorioAnual(relatorio) {
+    if (!relatorio.meses || Object.keys(relatorio.meses).length === 0) {
+        return '<div class="loading">Nenhum registro encontrado para o período selecionado.</div>';
+    }
+    
+    let html = `
+        <div class="clt-summary">
+            <h4>📋 Relatório Anual - ${relatorio.ano}</h4>
+            <div class="summary-item">
+                <span>Funcionário:</span>
+                <span><strong>${relatorio.nome}</strong></span>
+            </div>
+        </div>
+    `;
+    
+    // Ordenar meses para exibição correta
+    const mesesOrdenados = Object.keys(relatorio.meses)
+        .map(mes => parseInt(mes))
+        .sort((a, b) => a - b);
+    
+    mesesOrdenados.forEach(mesNum => {
+        const relatorioMes = relatorio.meses[mesNum];
+        const nomeMes = obterNomeMes(mesNum);
+        
+        html += `
+            <div class="month-header">${nomeMes} ${relatorio.ano}</div>
+            <table class="clt-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Dia</th>
+                        <th>Entrada</th>
+                    <th>Início Almoço</th>
+                    <th>Fim Almoço</th>
+                        <th>Saída</th>
+                        <th>Almoçou</th>
+                        <th>Saldo do Dia</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        relatorioMes.dias.forEach(dia => {
+            const saldoClass = dia.saldo_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo';
+            
+            html += `
+                <tr>
+                    <td>${dia.data}</td>
+                    <td>${dia.dia_semana}</td>
+                    <td>${dia.entrada}</td>
+                    <td>${dia.almoco_ida}</td>
+                    <td>${dia.almoco_volta}</td>
+                    <td>${dia.saida}</td>
+                    <td>${dia.almocou}</td>
+                    <td class="${saldoClass}">${dia.saldo}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+            
+            <div class="clt-summary">
+                <div class="summary-item">
+                    <span>Total Horas Trabalhadas:</span>
+                    <span>${relatorioMes.total_horas_trabalhadas}</span>
+                </div>
+                <div class="summary-item">
+                    <span>Total Horas Previstas:</span>
+                    <span>${relatorioMes.total_horas_previstas}</span>
+                </div>
+                <div class="summary-item summary-total">
+                    <span>Saldo do Mês:</span>
+                    <span class="${relatorioMes.saldo_final_minutos >= 0 ? 'saldo-positivo' : 'saldo-negativo'}">
+                        ${relatorioMes.saldo_final}
+                    </span>
+                </div>
+            </div>
+            <br>
+        `;
+    });
+    
+    return html;
+}
+
+/**
+ * Retorna o nome do mês em português baseado no número do mês.
+ * @param {number} numeroMes - O número do mês (1-12).
+ * @returns {string} O nome do mês.
+ */
+function obterNomeMes(numeroMes) {
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    return meses[numeroMes - 1] || 'Mês Desconhecido';
+}
+
+/**
+ * Exporta o relatório CLT para um arquivo Excel (XLSX).
+ * Inicia o download do arquivo gerado pelo backend.
+ */
+async function exportarRelatorioCLT() {
+    const funcionario = document.getElementById('cltFuncionario').value;
+    const tipo = document.getElementById('cltTipo').value;
+    const mes = document.getElementById('cltMes').value;
+    const ano = document.getElementById('cltAno').value;
+    
+    // Validações
+    if (!funcionario) {
+        showPopup('Selecione um funcionário para exportar o relatório.', 'error');
+        return;
+    }
+    
+    if (!mes || !ano) {
+        showPopup('Selecione mês e ano para exportar o relatório.', 'error');
+        return;
+    }
+    
+    try {
+        // Constrói a URL para a API de exportação
+        const url = `/api/export_relatorio_clt?nome=${encodeURIComponent(funcionario)}&mes=${mes}&ano=${ano}&tipo=${tipo}`;
+        
+        // Cria um link temporário e simula um clique para iniciar o download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `relatorio_clt_${funcionario}_${mes}_${ano}.xlsx`; // Nome do arquivo para download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showPopup('Download do relatório iniciado.', 'success');
+    } catch (e) {
+        console.error('Erro ao exportar relatório:', e);
+        showPopup('Erro ao exportar relatório.', 'error');
+    }
+}
+
+// ========== MODAL DE CONFIGURAÇÃO ==========
+/**
+ * Abre o modal de configurações e carrega as configurações atuais.
+ */
+function openConfigModal() {
+    document.getElementById('configModal').classList.add('show');
+    loadCurrentConfig(); // Carrega as configurações gerais
+    loadCLTConfig();     // Carrega as configurações CLT
+}
+
+/**
+ * Fecha o modal de configurações.
+ */
+function closeConfigModal() {
+    document.getElementById('configModal').classList.remove('show');
+}
+
+/**
+ * Alterna a visibilidade da seção de configuração do banco de dados com base no tipo de armazenamento selecionado.
+ * Atualiza também o status visual do armazenamento.
+ */
+function toggleDatabaseConfig() {
+    const storageType = document.getElementById('storageType').value;
+    const dbConfig = document.getElementById('databaseConfig');
+    const status = document.getElementById('storageStatus');
+    
+    if (storageType === 'database') {
+        dbConfig.style.display = 'block';
+        status.className = 'storage-status database';
+        status.innerHTML = '🗃️ Modo: Banco de Dados';
+    } else {
+        dbConfig.style.display = 'none';
+        status.className = 'storage-status local';
+        status.innerHTML = '📁 Modo: Armazenamento Local';
+    }
+}
+
+/**
+ * Carrega as configurações atuais do sistema (gerais e de armazenamento) da API e preenche o modal.
+ */
+async function loadCurrentConfig() {
+    try {
+        const resp = await fetch("/api/get_storage_config");
+        const data = await resp.json();
+        
+        if (data.success) {
+            currentConfig = data.config;
+            document.getElementById('storageType').value = currentConfig.storage_type;
+            document.getElementById('modalConfirmSeconds').value = currentConfig.confirmation_seconds;
+            document.getElementById('modalCooldownSeconds').value = currentConfig.attendance_cooldown_seconds;
+            
+            // Preenche os campos de configuração do banco de dados
+            if (currentConfig.database_config) {
+                document.getElementById('dbType').value = currentConfig.database_config.type || 'sqlite';
+                document.getElementById('dbHost').value = currentConfig.database_config.host || '';
+                document.getElementById('dbPort').value = currentConfig.database_config.port || '';
+                document.getElementById('dbName').value = currentConfig.database_config.database || '';
+                document.getElementById('dbUser').value = currentConfig.database_config.user || '';
+                document.getElementById('dbPassword').value = currentConfig.database_config.password || '';
+            }
+            toggleDatabaseConfig(); // Atualiza a visibilidade da seção do banco de dados
+        }
+    } catch (e) {
+        console.error('Erro ao carregar configurações:', e);
+        showPopup('Erro ao carregar configurações.', 'error');
+    }
+}
+
+/**
+ * Salva as configurações do sistema (gerais, armazenamento e CLT) para o backend.
+ */
+async function saveConfig() {
+    try {
+        const storageConfig = {
+            storage_type: document.getElementById('storageType').value,
+            confirmation_seconds: parseFloat(document.getElementById('modalConfirmSeconds').value),
+            attendance_cooldown_seconds: parseInt(document.getElementById('modalCooldownSeconds').value),
+            database_config: {
+                type: document.getElementById('dbType').value,
+                host: document.getElementById('dbHost').value,
+                port: document.getElementById('dbPort').value,
+                database: document.getElementById('dbName').value,
+                user: document.getElementById('dbUser').value,
+                password: document.getElementById('dbPassword').value
+            }
+        };
+        
+        const cltConfig = {
+            entrada_padrao: document.getElementById('modalEntradaPadrao').value,
+            saida_padrao: document.getElementById('modalSaidaPadrao').value,
+            tempo_almoco_minutos: parseInt(document.getElementById('modalTempoAlmoco').value)
+        };
+
+        // Salvar configurações de armazenamento
+        const respStorage = await fetch("/api/set_storage_config", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(storageConfig)
+        });
+        const dataStorage = await respStorage.json();
+
+        // Salvar configurações CLT
+        const respCLT = await fetch("/api/set_clt_config", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(cltConfig)
+        });
+        const dataCLT = await respCLT.json();
+        
+        if (dataStorage.success && dataCLT.success) {
+            showPopup('Configurações salvas com sucesso!', 'success');
+            closeConfigModal();
+            // Atualizar configurações na página principal
+            loadConfig();
+            loadCLTConfig(); // Recarregar configurações CLT após salvar
+        } else {
+            showPopup('Erro ao salvar configurações: ' + (dataStorage.error || dataCLT.error), 'error');
+        }
+    } catch (e) {
+        console.error('Erro ao salvar configuração:', e);
+        showPopup('Erro ao salvar configurações', 'error');
+    }
+}
+
+/**
+ * Testa a conexão com o banco de dados usando as configurações fornecidas no modal.
+ */
+async function testDatabaseConnection() {
+    try {
+        const config = {
+            type: document.getElementById('dbType').value,
+            host: document.getElementById('dbHost').value,
+            port: document.getElementById('dbPort').value,
+            database: document.getElementById('dbName').value,
+            user: document.getElementById('dbUser').value,
+            password: document.getElementById('dbPassword').value
+        };
+        
+        const resp = await fetch("/api/test_database_connection", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(config)
+        });
+        
+        const data = await resp.json();
+        if (data.success) {
+            showPopup('✅ Conexão com o banco de dados bem-sucedida!', 'success');
+        } else {
+            showPopup('❌ Erro na conexão: ' + data.error, 'error');
+        }
+    } catch (e) {
+        console.error('Erro ao testar conexão:', e);
+        showPopup('Erro ao testar conexão com o banco.', 'error');
+    }
+}
+
+/**
+ * Carrega as configurações CLT atuais do backend e preenche os campos no modal.
+ */
+async function loadCLTConfig() {
+    try {
+        const resp = await fetch("/api/get_clt_config");
+        const data = await resp.json();
+        
+        if (data.success) {
+            document.getElementById('modalEntradaPadrao').value = data.config.entrada_padrao;
+            document.getElementById('modalSaidaPadrao').value = data.config.saida_padrao;
+            document.getElementById('modalTempoAlmoco').value = data.config.tempo_almoco_minutos;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar configurações CLT:', e);
+        showPopup('Erro ao carregar configurações CLT.', 'error');
+    }
+}
+
+// A função saveCLTConfig foi integrada na saveConfig principal para salvar tudo de uma vez.
+// async function saveCLTConfig() { ... }
+
+// ========== INICIALIZAÇÃO ==========
+// Executa funções de inicialização quando o DOM estiver completamente carregado
+document.addEventListener('DOMContentLoaded', () => {
+    loadFaces();
+    loadAttendance();
+    loadConfig(); // Carrega configurações gerais (confirmation_seconds, cooldown_seconds)
+    loadCurrentConfig(); // Carrega configurações de armazenamento para o modal
+    
+    // Inicializar relatório CLT
+    carregarFuncionarios();
+    preencherAnos();
+    loadCLTConfig(); // Carrega configurações CLT para o modal
+});
+
+// ========== FUNÇÕES DE STATUS E POPUP ==========
+/**
+ * Atualiza a mensagem de status na interface do usuário.
+ * @param {string} message - A mensagem a ser exibida.
+ * @param {string} type - O tipo de mensagem (success, error, warning, info) para estilização.
+ */
+function updateStatus(message, type = '') {
+    const el = document.getElementById('status');
+    el.textContent = message;
+    if (type === 'success') el.style.background = '#d4edda';
+    else if (type === 'error') el.style.background = '#f8d7da';
+    else if (type === 'warning') el.style.background = '#fff3cd';
+    else if (type === 'info') el.style.background = '#cce5ff';
+    else el.style.background = '#fff3cd'; // Padrão
+}
+
+/**
+ * Exibe um popup de notificação temporário no canto superior direito da tela.
+ * @param {string} msg - A mensagem a ser exibida no popup.
+ * @param {string} type - O tipo de popup (success, error, warning, info) para estilização.
+ */
+function showPopup(msg, type = "info") {
+    const popup = document.createElement('div');
+    popup.className = `popup ${type}`;
+    popup.textContent = msg;
+    document.body.appendChild(popup);
+
+    // Força o reflow para garantir a transição CSS
+    void popup.offsetWidth;
+    popup.classList.add('show');
+
+    setTimeout(() => {
+        popup.classList.remove('show');
+        popup.addEventListener('transitionend', () => popup.remove());
+    }, 3000); // Popup desaparece após 3 segundos
+}
+
+// ========== FUNÇÕES DA CÂMERA ==========
+/**
+ * Inicia o feed da câmera e o processo de reconhecimento facial em tempo real.
+ */
+async function startCamera() {
+    try {
+        updateStatus('Iniciando câmera...');
+        const resp = await fetch("/api/start_camera", { method: 'POST' });
+        const data = await resp.json();
+        
+        if (data.success) {
+            document.getElementById('videoFeed').style.display = 'block';
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'inline-block';
+            updateStatus('Câmera ativa - reconhecimento em tempo real', 'success');
+            isCameraRunning = true;
+            startRecognitionUpdates(); // Inicia a atualização dos resultados de reconhecimento
+        } else {
+            updateStatus('Erro ao iniciar câmera', 'error');
+            showPopup('Erro ao iniciar câmera.', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        updateStatus('Erro de conexão ao iniciar câmera', 'error');
+        showPopup('Erro de conexão ao iniciar câmera.', 'error');
+    }
+}
+
+/**
+ * Para o feed da câmera e o processo de reconhecimento facial.
+ */
+async function stopCamera() {
+    try {
+        if (recognitionUpdateInterval) {
+            clearInterval(recognitionUpdateInterval);
+            recognitionUpdateInterval = null;
+        }
+        
+        await fetch("/api/stop_camera", { method: 'POST' });
+        document.getElementById('videoFeed').style.display = 'none';
+        document.getElementById('startBtn').style.display = 'inline-block';
+        document.getElementById('stopBtn').style.display = 'none';
+        updateStatus('Câmera parada');
+        isCameraRunning = false;
+        
+    } catch (e) {
+        console.error(e);
+        updateStatus('Erro ao parar câmera', 'error');
+        showPopup('Erro ao parar câmera.', 'error');
+    }
+}
+
+// ========== RECONHECIMENTO EM TEMPO REAL ==========
+/**
+ * Inicia um intervalo para buscar e exibir os resultados do reconhecimento facial da API.
+ * Também lida com eventos de registro de ponto (sucesso, cooldown).
+ */
+async function startRecognitionUpdates() {
+    if (recognitionUpdateInterval) clearInterval(recognitionUpdateInterval);
+    
+    recognitionUpdateInterval = setInterval(async () => {
+        if (!isCameraRunning) return;
+        
+        try {
+            const resp = await fetch("/api/recognition_results");
+            const data = await resp.json();
+
+            if (data.event) {
+                if (data.event.type === "cooldown") {
+                    showPopup(`⚠️ Aguarde ${data.event.remaining} segundos antes de registrar novamente.`, "warning");
+                    // Não para a câmera, apenas informa o cooldown
+                } else if (data.event.type === "success") {
+                    showPopup(`✅ Registro de ${data.event.name} cadastrado com sucesso!`, "success");
+                    loadAttendance(); // Recarrega a lista de registros de ponto
+                    // Não para a câmera, permite que o usuário continue sendo reconhecido
+                }
+            }
+
+            if (data.results && data.results.length > 0) {
+                const recognizedNames = data.results.filter(r => r.name !== "Unknown").map(r => r.name);
+                if (recognizedNames.length > 0) {
+                    updateStatus(`Detectado: ${recognizedNames.join(", ")}`, 'success');
+                } else {
+                    updateStatus('Face(s) detectada(s), mas não reconhecida(s).');
+                }
+            } else {
+                updateStatus('Nenhuma face detectada.');
+            }
+        } catch (e) {
+            console.error(e);
+            updateStatus('Erro ao obter resultados do reconhecimento.', 'error');
+        }
+    }, 1000); // Atualiza a cada 1 segundo
+}
+
+// ========== GERENCIAMENTO DE FACES ==========
+/**
+ * Exibe uma prévia da imagem selecionada pelo usuário para upload.
+ */
+function previewImage() {
+    const input = document.getElementById('imageInput');
+    const prev = document.getElementById('imagePreview');
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => { 
+            prev.src = e.target.result; 
+            prev.style.display = 'block'; 
+        };
+        reader.readAsDataURL(input.files[0]);
+    } else {
+        prev.style.display = 'none';
+    }
+}
+
+/**
+ * Adiciona uma nova face ao sistema através de um arquivo de imagem enviado pelo usuário.
+ */
+async function addFace() {
+    const name = document.getElementById('nameInput').value.trim();
+    const file = document.getElementById('imageInput').files[0];
+    
+    if (!name || !file) { 
+        showPopup('Por favor, forneça um nome e selecione uma imagem.', 'error'); 
+        return; 
+    }
+    
+    updateStatus('Adicionando face...');
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+        try {
+            const resp = await fetch("/api/add_face", {
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ name, image: e.target.result })
+            });
+            const data = await resp.json();
+            
+            if (data.success) { 
+                showPopup(data.message, 'success'); 
+                document.getElementById('nameInput').value = '';
+                document.getElementById('imageInput').value = '';
+                document.getElementById('imagePreview').style.display = 'none';
+                loadFaces(); // Recarrega a lista de faces cadastradas
+                carregarFuncionarios(); // Atualiza a lista de funcionários para o relatório CLT
+            } else {
+                showPopup('Erro: ' + data.error, 'error');
+            }
+        } catch (err) { 
+            console.error(err); 
+            showPopup('Erro de conexão ao adicionar face.', 'error'); 
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Captura uma face diretamente do feed da câmera e a adiciona ao sistema.
+ */
+async function captureFace() {
+    const name = document.getElementById('nameInput').value.trim();
+    if (!name) { 
+        showPopup('Por favor, forneça o nome antes de capturar a face.', 'error'); 
+        return; 
+    }
+
+    // Inicia a câmera se ainda não estiver rodando
+    if (!isCameraRunning) {
+        await startCamera();
+    }
+    updateStatus('Capturando da câmera...');
+
+    try {
+        const resp = await fetch("/api/capture_face", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            showPopup(`✅ Face de ${name} cadastrada com sucesso!`, "success");
+            document.getElementById('nameInput').value = '';
+            loadFaces(); // Recarrega a lista de faces cadastradas
+            carregarFuncionarios(); // Atualiza a lista de funcionários para o relatório CLT
+            // Não para a câmera automaticamente, permitindo múltiplas capturas ou reconhecimento contínuo
+        } else {
+            showPopup(`❌ Erro ao capturar face: ${data.error}`, "error");
+        }
+    } catch (err) {
+        console.error(err);
+        showPopup('Erro ao capturar face.', 'error');
+    }
+}
+
+/**
+ * Carrega e exibe a lista de faces cadastradas no sistema.
+ */
+async function loadFaces() {
+    try {
+        const resp = await fetch("/api/get_faces");
+        const data = await resp.json();
+        const div = document.getElementById('facesList');
+        div.innerHTML = ''; // Limpa a lista atual
+        
+        if (!data.faces || data.faces.length === 0) { 
+            div.innerHTML = '<div>Nenhuma face cadastrada.</div>'; 
+            return; 
+        }
+        
+        data.faces.forEach(face => {
+            const item = document.createElement('div');
+            item.className = 'face-item';
+            // Formata a data de adição para exibição local
+            const addedDate = new Date(face.added_at).toLocaleString("pt-BR", { 
+                year: 'numeric', month: '2-digit', day: '2-digit', 
+                hour: '2-digit', minute: '2-digit', second: '2-digit' 
+            });
+            item.innerHTML = `
+                <strong>${face.name}</strong><br>
+                <small>Adicionado: ${addedDate}</small><br>
+                <button class="btn-danger" onclick="deleteFace('${face.name}')">Deletar</button>
+            `;
+            div.appendChild(item);
+        });
+    } catch (e) {
+        console.error(e);
+        showPopup('Erro ao carregar faces cadastradas.', 'error');
+    }
+}
+
+/**
+ * Deleta uma face cadastrada do sistema.
+ * @param {string} name - O nome da face a ser deletada.
+ */
+async function deleteFace(name) {
+    if (!confirm(`Tem certeza que deseja deletar a face de ${name}?`)) return;
+    
+    try {
+        const resp = await fetch("/api/delete_face", { 
+            method: 'POST', 
+            headers: {'Content-Type':'application/json'}, 
+            body: JSON.stringify({ name }) 
+        });
+        const data = await resp.json();
+        
+        if (data.success) { 
+            showPopup(data.message, 'success'); 
+            loadFaces(); // Recarrega a lista de faces
+            carregarFuncionarios(); // Atualiza a lista de funcionários para o relatório CLT
+        } else {
+            showPopup('Erro: ' + data.error, 'error');
+        }
+    } catch (e) { 
+        console.error(e); 
+        showPopup('Erro de conexão ao deletar face.', 'error'); 
+    }
+}
+
+// ========== REGISTROS DE PONTO ==========
+/**
+ * Carrega e exibe os registros de ponto mais recentes na tabela.
+ */
+async function loadAttendance() {
+    try {
+        const resp = await fetch("/api/get_attendance?limit=10"); // Limita a 10 registros recentes
+        const data = await resp.json();
+        const tbody = document.querySelector('#attendanceTable tbody');
+        tbody.innerHTML = ''; // Limpa a tabela atual
+        
+        if (data.attendance && data.attendance.length) {
+            data.attendance.forEach(row => {
+                const tr = document.createElement('tr');
+                const date = new Date(row.timestamp);
+                
+                // Formata o timestamp para o fuso horário local do usuário
+                const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const formatted = date.toLocaleString("pt-BR", { 
+                    timeZone: userTimeZone,
+                    day: "2-digit", 
+                    month: "2-digit", 
+                    year: "numeric",
+                    hour: "2-digit", 
+                    minute: "2-digit", 
+                    hour12: false 
+                }).replace(",", " -"); // Substitui a vírgula por hífen para melhor leitura
+                
+                tr.innerHTML = `<td>${row.name}</td><td>${formatted}</td>`;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="2">Nenhum registro de ponto encontrado.</td></tr>';
+        }
+    } catch (e) {
+        console.error(e);
+        showPopup('Erro ao carregar registros de ponto.', 'error');
+    }
+}
+
+// ========== CONFIGURAÇÕES GERAIS (fora do modal, apenas para exibição ou update rápido) ==========
+/**
+ * Carrega as configurações gerais (confirmation_seconds, cooldown_seconds) da API e preenche os campos na interface.
+ * Esta função é para os campos que ficavam diretamente na página, agora apenas para leitura ou se forem reintroduzidos.
+ */
+async function loadConfig() {
+    try {
+        const resp = await fetch("/api/get_config");
+        const data = await resp.json();
+        
+        if (data.success) {
+            // Estes campos foram movidos para o modal, mas a função pode ser mantida para outros fins
+            // document.getElementById('confirmSeconds').value = data.config.confirmation_seconds;
+            // document.getElementById('cooldownSeconds').value = data.config.attendance_cooldown_seconds;
+        }
+    } catch (e) { 
+        console.error(e); 
+        // showPopup('Erro ao carregar configurações gerais.', 'error'); // Comentado para evitar popups redundantes
+    }
+}
+
+// A função updateConfig foi integrada na saveConfig do modal para salvar tudo de uma vez.
+// async function updateConfig() { ... }
+
+// ========== RELATÓRIOS GERAIS (CSV/Excel) ==========
+/**
+ * Inicia o download do relatório de ponto geral em formato CSV.
+ */
+async function downloadReport() {
+    try {
+        updateStatus('Preparando download do relatório CSV...');
+        
+        const link = document.createElement('a');
+        link.href = '/api/download_report';
+        link.download = `relatorio_ponto_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showPopup('Download do relatório CSV iniciado.', 'success');
+        
+    } catch (e) {
+        console.error(e);
+        showPopup('Erro ao baixar relatório CSV.', 'error');
+    }
+}
+
+/**
+ * Inicia o download do relatório de ponto geral em formato Excel (XLSX).
+ */
+async function downloadExcel() {
+    try {
+        updateStatus('Gerando e baixando relatório Excel...');
+        
+        const link = document.createElement('a');
+        link.href = '/api/download_excel';
+        link.download = `relatorio_ponto_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showPopup('Download do relatório Excel iniciado.', 'success');
+        
+    } catch (e) {
+        console.error(e);
+        showPopup('Erro ao gerar e baixar relatório Excel.', 'error');
+    }
+}
+
+// ========== UTILITÁRIOS ==========
+// A função showPopup já está definida acima, movida para uma seção mais lógica.
+</script>
+</body>
+</html>
+
